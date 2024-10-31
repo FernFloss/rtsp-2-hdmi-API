@@ -7,6 +7,8 @@ from pydantic import BaseModel
 import json
 import re 
 import asyncio
+import os
+from datetime import datetime
 
 
 app = FastAPI()
@@ -14,6 +16,7 @@ app = FastAPI()
 with open("config.json") as f:
     config = json.load(f)
 gstreamer_path = config.get("gstreamer_path")
+file_path = config.get("file_path")
 
 # Переменные для хранения состояния, URL и процесса потока
 rtsp_url: Optional[str] = None
@@ -65,7 +68,7 @@ async def home():
 
 @app.post("/start")
 async def start_stream(data: StreamData):
-    global rtsp_url, stream_status, process, error_message, monitoring_active, monitoring_task
+    global rtsp_url, stream_status, process, error_message, monitoring_active, monitoring_task, file_path
     
     # Проверка валидности RTSP URL
     if not validate_rtsp_url(data.url):
@@ -81,6 +84,7 @@ async def start_stream(data: StreamData):
     stream_status = "Preparing"
     error_message = None
 
+    file_path = file_path + "/" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".mkv"
     command = [
         gstreamer_path,
         "rtspsrc", f'location="{rtsp_url}"',
@@ -90,6 +94,10 @@ async def start_stream(data: StreamData):
         "!", "queue",
         "!", "rtph264depay",
         "!", "h264parse",
+        "!", "tee", "name=t", "t.",
+        "!", "queue",
+        "!", "matroskamux",
+        "!", "filesink", f'location={file_path}', 't.',
         "!", "avdec_h264",
         "!", "autovideosink"
     ]

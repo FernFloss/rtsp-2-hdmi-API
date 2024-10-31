@@ -1,3 +1,4 @@
 {
-    "gstreamer_path": "C:/archive/gstreamer/1.0/mingw_x86_64/bin/gst-launch-1.0.exe"
+    "gstreamer_path": "C:/archive/gstreamer/1.0/mingw_x86_64/bin/gst-launch-1.0.exe",
+    "file_path" : "C:/trash/project/video"
 }
