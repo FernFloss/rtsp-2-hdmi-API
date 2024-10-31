@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTSP Stream Controller</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        input { margin: 10px; padding: 8px; width: 300px; }
+        button { padding: 10px 20px; font-size: 16px; margin: 10px; }
+        #status { margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>RTSP Stream Controller</h1>
+    <input type="text" id="urlInput" placeholder="rtsp://example.com/stream">
+    <br>
+    <button onclick="startStream()">Start</button>
+    <button onclick="stopStream()">Stop</button>
+    <div id="status">Status: Stopped</div>
+    
+    <!-- Вывод сообщения об ошибке -->
+    <p id="error" style="color: red;"></p>
+ 
+
+    <script>
+        async function startStream() {
+            const urlInput = document.getElementById("urlInput").value;
+            const errorElement = document.getElementById("error");
+
+            // Очистка предыдущих ошибок
+            errorElement.textContent = "";
+
+            try {
+                const response = await fetch("/start", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ url: urlInput })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById("status").textContent = data.status;
+                } else {
+                    // Показать сообщение об ошибке, если ответ не успешен
+                    errorElement.textContent = data.detail || "An unknown error occurred.";
+                }
+            } catch (error) {
+                document.getElementById("status").textContent = "Failed to connect to the server.";
+            }
+        }
+
+        async function stopStream() {
+            const errorElement = document.getElementById("error");
+            errorElement.textContent = "";  // Очистка предыдущих ошибок
+
+            try {
+                const response = await fetch("/stop", { method: "POST" });
+                const data = await response.json();
+                document.getElementById("status").textContent = data.status;
+            } catch (error) {
+                errorElement.textContent = "Failed to connect to the server.";
+            }
+        }
+
+        async function getStatus() {
+            const response = await fetch("/status");
+            const data = await response.json();
+            document.getElementById("status").textContent = data.status;
+            document.getElementById("error").textContent = data.error_message;
+        }
+
+        // Получение начального статуса при загрузке страницы
+        getStatus();
+        setInterval(getStatus, 1000);
+    </script>
+</body>
+</html>
