@@ -9,6 +9,9 @@ import re
 import asyncio
 import os
 from datetime import datetime
+from prometheus_client import Gauge, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import start_http_server
+from starlette.responses import Response
 
 
 app = FastAPI()
@@ -16,7 +19,7 @@ app = FastAPI()
 with open("config.json") as f:
     config = json.load(f)
 gstreamer_path = config.get("gstreamer_path")
-file_path = config.get("file_path")
+file_path_orig = config.get("file_path")
 
 # Переменные для хранения состояния, URL и процесса потока
 rtsp_url: Optional[str] = None
@@ -68,7 +71,7 @@ async def home():
 
 @app.post("/start")
 async def start_stream(data: StreamData):
-    global rtsp_url, stream_status, process, error_message, monitoring_active, monitoring_task, file_path
+    global rtsp_url, stream_status, process, error_message, monitoring_active, monitoring_task, file_path_orig
     
     # Проверка валидности RTSP URL
     if not validate_rtsp_url(data.url):
@@ -84,7 +87,7 @@ async def start_stream(data: StreamData):
     stream_status = "Preparing"
     error_message = None
 
-    file_path = file_path + "/" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".mkv"
+    file_path = file_path_orig + "/" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".mkv"
     command = [
         gstreamer_path,
         "rtspsrc", f'location="{rtsp_url}"',
@@ -147,6 +150,26 @@ async def stop_stream():
 async def get_status():
     global stream_status, error_message, rtsp_url
     return {"status": stream_status, "rtsp_url": rtsp_url if rtsp_url else "No stream","error_message": error_message}
+
+# Создаем метрику типа Gauge для статуса пайплайна
+pipeline_status = Gauge("pipeline_status", "Status of the pipeline", ['status', 'error'])
+
+# Функция для обновления статуса пайплайна (для примера - случайное значение)
+def update_pipeline_status():
+    global stream_status, error_message
+    if error_message:
+        pipeline_status.labels(status = stream_status, error = error_message).set(-1)
+    elif (stream_status == 'Running'):
+        pipeline_status.labels(status = stream_status, error= "None").set(1)
+    elif (stream_status == 'Stopped'):
+        pipeline_status.labels(status = stream_status, error= "None").set(0)
+        
+
+@app.get("/metrics")
+async def metrics():
+    # Обновляем статус пайплайна перед выдачей метрик
+    update_pipeline_status()
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 # Подключение статических файлов
 app.mount("/static", StaticFiles(directory="static"), name="static")
