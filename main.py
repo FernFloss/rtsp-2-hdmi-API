@@ -36,7 +36,7 @@ def validate_rtsp_url(url: str) -> bool:
     return bool(re.match(rtsp_pattern, url))
 
 async def monitor_process():
-    global stream_status, process, error_message
+    global stream_status, process, error_message, pipeline_status
     while True:
         await asyncio.sleep(1)
         if process: 
@@ -45,6 +45,7 @@ async def monitor_process():
                 if code != 0:
                     output, error = process.communicate()
                     error_message = error
+                    pipeline_status.clear()
                     stream_status = "Something wrong with programms"
                 else:
                     stream_status = "Stopped"
@@ -71,7 +72,9 @@ async def home():
 
 @app.post("/start")
 async def start_stream(data: StreamData):
-    global rtsp_url, stream_status, process, error_message, monitoring_active, monitoring_task, file_path_orig
+    global rtsp_url, stream_status, process, error_message, monitoring_active, monitoring_task, file_path_orig, pipeline_status
+    
+    pipeline_status.clear()
     
     # Проверка валидности RTSP URL
     if not validate_rtsp_url(data.url):
@@ -120,7 +123,10 @@ async def start_stream(data: StreamData):
 
 @app.post("/stop")
 async def stop_stream():
-    global rtsp_url, stream_status, process, error_message, monitoring_active, monitoring_task
+    
+    global rtsp_url, stream_status, process, error_message, monitoring_active, pipeline_status, monitoring_task
+    
+    pipeline_status.clear()
 
     if stream_status == "Stopped":
         error_messag = 'Stream already stopped'
@@ -156,7 +162,7 @@ pipeline_status = Gauge("pipeline_status", "Status of the pipeline", ['status', 
 
 # Функция для обновления статуса пайплайна (для примера - случайное значение)
 def update_pipeline_status():
-    global stream_status, error_message
+    global stream_status, error_message, pipeline_status
     if error_message:
         pipeline_status.labels(status = stream_status, error = error_message).set(-1)
     elif (stream_status == 'Running'):
