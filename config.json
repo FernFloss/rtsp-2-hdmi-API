@@ -1,4 +1,5 @@
 {
-    "gstreamer_path": "C:/archive/gstreamer/1.0/mingw_x86_64/bin/gst-launch-1.0.exe",
-    "file_path" : "C:/trash/tharshuniversity"
+    "gstreamer_path": "gst-launch-1.0",
+    "file_path" : "/app/videos",
+    "pipeline" : "rtspsrc location= protocols=tcp latency=200 drop-on-latency=true ! queue ! rtph264depay ! h264parse ! tee name=t t. ! queue ! matroskamux ! filesink location="
 }

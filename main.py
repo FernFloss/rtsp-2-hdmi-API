@@ -19,14 +19,16 @@ app = FastAPI()
 with open("config.json") as f:
     config = json.load(f)
 gstreamer_path = config.get("gstreamer_path")
+pipeline_examle = config.get("pipeline") 
 file_path_orig = config.get("file_path")
+
+pipeline_examle = gstreamer_path + ' ' + pipeline_examle
 
 # Переменные для хранения состояния, URL и процесса потока
 rtsp_url: Optional[str] = None
 stream_status: str = "Stopped"
 error_message: Optional[str] = None
 process: Optional[subprocess.Popen] = None
-monitoring_active: bool = False  # Флаг для управления мониторингом
 
 # Регулярное выражение для проверки RTSP URL
 rtsp_pattern = r"^rtsp:\/\/(\d{1,3}\.){3}\d{1,3}(:\d{1,5})?(\/\S*)?$"
@@ -72,16 +74,18 @@ async def home():
 
 @app.post("/start")
 async def start_stream(data: StreamData):
-    global rtsp_url, stream_status, process, error_message, monitoring_active, monitoring_task, file_path_orig, pipeline_status
+    global rtsp_url, stream_status, process, error_message, monitoring_task, file_path_orig, pipeline_status
     
     pipeline_status.clear()
+    monitoring_task = False
     
     # Проверка валидности RTSP URL
     if not validate_rtsp_url(data.url):
+        stream_status = "Invalid RTSP URL"
         error_message = "Invalid RTSP URL. Please enter a correct RTSP URL"
         raise HTTPException(status_code=400, detail="Invalid RTSP URL. Please enter a correct RTSP URL.")
 
-
+    print("Не выбило")
     if stream_status == "Running":
         error_message = "Stream already running."
         raise HTTPException(status_code=400, detail="Stream already running.")
@@ -91,26 +95,11 @@ async def start_stream(data: StreamData):
     error_message = None
 
     file_path = file_path_orig + "/" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".mkv"
-    command = [
-        gstreamer_path,
-        "rtspsrc", f'location="{rtsp_url}"',
-        "protocols=tcp", 
-        "latency=200",
-        "drop-on-latency=true",
-        "!", "queue",
-        "!", "rtph264depay",
-        "!", "h264parse",
-        "!", "tee", "name=t", "t.",
-        "!", "queue",
-        "!", "matroskamux",
-        "!", "filesink", f'location={file_path}', 't.',
-        "!", "avdec_h264",
-        "!", "autovideosink"
-    ]
+    command = pipeline_examle.replace("rtspsrc location=", f"rtspsrc location={rtsp_url}")
+    command = command.replace("filesink location=", f"filesink location={file_path}")
 
     try:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        monitoring_active = True  # Включаем мониторинг
+        process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Запускаем фоновые задачи для мониторинга
         asyncio.create_task(monitor_process())
         monitoring_task = asyncio.create_task(monitor_process())
@@ -118,6 +107,7 @@ async def start_stream(data: StreamData):
         stream_status = "Error something wrong with start"
         error_message = str(e)
         rtsp_url = None
+        monitoring_task = False
         raise HTTPException(status_code=500, detail=f"Failed to start stream: {e}")
     return {"status": stream_status, "rtsp_url": rtsp_url}
 
@@ -133,7 +123,6 @@ async def stop_stream():
         raise HTTPException(status_code=400, detail="Stream already stopped.")
     
     # Остановить мониторинг
-    monitoring_active = False
     if monitoring_task:
         monitoring_task.cancel()  # Отменяем задачу мониторинга
         try:
@@ -149,6 +138,7 @@ async def stop_stream():
     stream_status = "Stopped"
     rtsp_url = None
     error_message = None
+    monitoring_task = False
 
     return {"status": "Stream stopped"}
 
